@@ -2,9 +2,10 @@ import { useDiagramStore } from '../state/diagramStore';
 
 export const DecisionModal = () => {
   const decisionQueue = useDiagramStore((state) => state.decisionQueue);
+  const autoMode = useDiagramStore((state) => state.autoMode);
   const resolveDecision = useDiagramStore((state) => state.resolveDecision);
 
-  if (decisionQueue.length === 0) return null;
+  if (decisionQueue.length === 0 || autoMode) return null;
 
   const decision = decisionQueue[0];
 
@@ -21,8 +22,9 @@ export const DecisionModal = () => {
               marginTop: '8px',
               padding: '8px',
               borderRadius: '8px',
-              border: '1px solid #cbd5f5',
-              background: '#f8fafc'
+              border: '1px solid #cfcfcf',
+              background: '#f5f5f5',
+              color: '#181818'
             }}
             onClick={() => resolveDecision(decision.tokenId, option.edgeId)}
           >

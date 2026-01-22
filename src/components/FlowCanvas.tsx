@@ -3,6 +3,8 @@ import ReactFlow, {
   Background,
   Controls,
   MarkerType,
+  Position,
+  getSmoothStepPath,
   type Connection,
   type Edge,
   type NodeTypes,
@@ -54,6 +56,34 @@ const getCenter = (node: { position: { x: number; y: number }; width?: number; h
   };
 };
 
+const handlePositionFromId = (handleId?: string) => {
+  if (!handleId) return Position.Right;
+  if (handleId.startsWith('t')) return Position.Top;
+  if (handleId.startsWith('b')) return Position.Bottom;
+  if (handleId.startsWith('l')) return Position.Left;
+  if (handleId.startsWith('r')) return Position.Right;
+  return Position.Right;
+};
+
+const pointFromHandle = (
+  node: { positionAbsolute?: { x: number; y: number }; width?: number; height?: number; type?: string },
+  handleId?: string
+) => {
+  const size = defaultSizes[node.type ?? 'action'] ?? defaultSizes.action;
+  const width = node.width ?? size.width;
+  const height = node.height ?? size.height;
+  const origin = node.positionAbsolute ?? { x: 0, y: 0 };
+  const positions: Record<string, { x: number; y: number }> = {
+    t: { x: origin.x + width / 2, y: origin.y },
+    r: { x: origin.x + width, y: origin.y + height / 2 },
+    b: { x: origin.x + width / 2, y: origin.y + height },
+    l: { x: origin.x, y: origin.y + height / 2 }
+  };
+  if (!handleId) return { x: origin.x + width, y: origin.y + height / 2 };
+  const key = handleId.slice(0, 1);
+  return positions[key] ?? { x: origin.x + width, y: origin.y + height / 2 };
+};
+
 export const FlowCanvas = () => {
   const entry = useDiagramStore((state) => state.diagrams[state.currentDiagramId]);
   const currentDiagramId = useDiagramStore((state) => state.currentDiagramId);
@@ -72,6 +102,7 @@ export const FlowCanvas = () => {
 
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const transform = useReactFlowStore((state) => state.transform);
+  const nodeInternals = useReactFlowStore((state) => state.nodeInternals);
 
   const nodes = entry.file.nodes;
   const edges: Edge[] = useMemo(() => {
@@ -90,6 +121,8 @@ export const FlowCanvas = () => {
         id: `e-${connection.source}-${connection.target}-${Date.now()}`,
         source: connection.source,
         target: connection.target,
+        sourceHandle: connection.sourceHandle,
+        targetHandle: connection.targetHandle,
         type: 'smoothstep',
         label: '',
         markerEnd: 'arrow'
@@ -130,6 +163,10 @@ export const FlowCanvas = () => {
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.isContentEditable) {
+        return;
+      }
       if (mode !== 'edit') return;
       if (event.key === 'Delete' || event.key === 'Backspace') {
         deleteSelection();
@@ -142,21 +179,36 @@ export const FlowCanvas = () => {
   const tokenPositions = useMemo(() => {
     const nodeMap = Object.fromEntries(nodes.map((node) => [node.id, node]));
     const edgeMap = Object.fromEntries(entry.file.edges.map((edge) => [edge.id, edge]));
+    const edgePathMap = new Map(
+      entry.file.edges.map((edge) => {
+        const sourceNode = nodeInternals.get(edge.source);
+        const targetNode = nodeInternals.get(edge.target);
+        if (!sourceNode || !targetNode) return [edge.id, null];
+        const sourcePoint = pointFromHandle(sourceNode, edge.sourceHandle);
+        const targetPoint = pointFromHandle(targetNode, edge.targetHandle);
+        const [edgePath] = getSmoothStepPath({
+          sourceX: sourcePoint.x,
+          sourceY: sourcePoint.y,
+          targetX: targetPoint.x,
+          targetY: targetPoint.y,
+          sourcePosition: handlePositionFromId(edge.sourceHandle),
+          targetPosition: handlePositionFromId(edge.targetHandle)
+        });
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', edgePath);
+        const length = path.getTotalLength();
+        return [edge.id, { path, length }];
+      })
+    );
     return tokens
       .filter((token) => token.status !== 'done')
       .map((token) => {
         if (token.currentEdgeId) {
           const edge = edgeMap[token.currentEdgeId];
-          const source = edge ? nodeMap[edge.source] : undefined;
-          const target = edge ? nodeMap[edge.target] : undefined;
-          if (source && target) {
-            const start = getCenter(source);
-            const end = getCenter(target);
-            return {
-              id: token.id,
-              x: start.x + (end.x - start.x) * token.progress,
-              y: start.y + (end.y - start.y) * token.progress
-            };
+          const edgePath = edgePathMap.get(token.currentEdgeId);
+          if (edge && edgePath) {
+            const point = edgePath.path.getPointAtLength(edgePath.length * token.progress);
+            return { id: token.id, x: point.x, y: point.y };
           }
         }
         const node = nodeMap[token.currentNodeId];
@@ -165,7 +217,7 @@ export const FlowCanvas = () => {
         return { id: token.id, x: center.x, y: center.y };
       })
       .filter(Boolean) as { id: string; x: number; y: number }[];
-  }, [tokens, nodes, entry.file.edges]);
+  }, [tokens, nodes, entry.file.edges, nodeInternals]);
 
   return (
     <div className="flow-wrapper" ref={wrapperRef}>
@@ -196,7 +248,7 @@ export const FlowCanvas = () => {
         nodesConnectable={mode === 'edit'}
         elementsSelectable={mode === 'edit'}
       >
-        <Background gap={16} color="#cbd5f5" />
+        <Background gap={16} color="#d4d4d4" />
         <Controls />
         <div
           style={{

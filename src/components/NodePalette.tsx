@@ -43,7 +43,7 @@ export const NodePalette = () => {
             key={diagramId}
             className="list-item"
             style={{
-              borderColor: diagramId === currentDiagramId ? '#38bdf8' : undefined,
+              borderColor: diagramId === currentDiagramId ? '#181818' : undefined,
               fontWeight: diagramId === currentDiagramId ? 600 : undefined
             }}
             onClick={() => setCurrentDiagram(diagramId)}

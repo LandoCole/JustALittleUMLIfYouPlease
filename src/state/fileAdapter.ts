@@ -32,6 +32,9 @@ export const openDirectory = async (): Promise<{ diagrams: DiagramFile[]; handle
       const file = await handle.getFile();
       try {
         const diagram = await readDiagramFromFile(file);
+        const fileId = name.replace(/\\.json$/i, '');
+        diagram.diagramId = fileId;
+        diagram.title = fileId;
         diagrams.push(diagram);
         handles.push({ handle, diagramId: diagram.diagramId });
       } catch (error) {
@@ -48,6 +51,9 @@ export const importDiagramFiles = async (files: FileList): Promise<DiagramFile[]
     if (!file.name.endsWith('.json')) continue;
     try {
       const diagram = await readDiagramFromFile(file);
+      const fileId = file.name.replace(/\\.json$/i, '');
+      diagram.diagramId = fileId;
+      diagram.title = fileId;
       results.push(diagram);
     } catch (error) {
       console.warn('Invalid diagram file', error);

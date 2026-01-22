@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { FlowCanvas } from './components/FlowCanvas';
 import { NodePalette } from './components/NodePalette';
 import { Inspector } from './components/Inspector';
@@ -27,8 +27,18 @@ const App = () => {
   const stopSimulation = useDiagramStore((state) => state.stopSimulation);
   const resetSimulation = useDiagramStore((state) => state.resetSimulation);
   const importFiles = useDiagramStore((state) => state.importFiles);
+  const diagramOrder = useDiagramStore((state) => state.diagramOrder);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const requestedFolder = useRef(false);
+
+  useEffect(() => {
+    if (!supportsFileAccess || requestedFolder.current) return;
+    requestedFolder.current = true;
+    if (diagramOrder.length === 1) {
+      void openFolder();
+    }
+  }, [diagramOrder.length, openFolder]);
 
   return (
     <div className="app-shell">
@@ -39,10 +49,14 @@ const App = () => {
         <button onClick={() => openFolder()} disabled={!supportsFileAccess}>
           Open Folder
         </button>
-        <button onClick={() => fileInputRef.current?.click()}>Import</button>
+        <button className="secondary" onClick={() => fileInputRef.current?.click()}>
+          Import
+        </button>
         <button onClick={() => saveCurrent()}>Save</button>
         <button onClick={() => saveAs()}>Save As</button>
-        <button onClick={() => saveCopy()}>Save Copy</button>
+        <button className="secondary" onClick={() => saveCopy()}>
+          Save Copy
+        </button>
         <button onClick={() => popNav()} disabled={navStack.length === 0}>
           Back
         </button>
